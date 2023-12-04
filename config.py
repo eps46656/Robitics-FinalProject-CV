@@ -1,1 +1,3 @@
 LOGO_CAP_DIR = ""
+
+PORT = 8436

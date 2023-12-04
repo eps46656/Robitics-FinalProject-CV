@@ -126,7 +126,7 @@ def load_model(args):
 
     return model
 
-class Estimator:
+class PoseEstimator:
     def __init__(self):
         args = parse_args()
         update_config(cfg, args)
@@ -154,7 +154,7 @@ class Estimator:
             std=(0.229, 0.224, 0.225))
 
         img = torchvision.transforms.functional.resize(
-            img,(self.rs_img_h, self.rs_img_w))
+            img, (self.rs_img_h, self.rs_img_w))
 
         outputs, timing_per_im = self.model(
             img.reshape(1, 3, self.rs_img_h, self.rs_img_w).cuda())

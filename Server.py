@@ -1,5 +1,6 @@
 import socket
 import threading
+from collections import deque
 
 class Server:
     def __init__(self, addr, port, session_func):
@@ -10,7 +11,7 @@ class Server:
         self.socket.settimeout(2)
         self.socket.listen(1024)
 
-        self.conns = list()
+        self.conns = deque()
 
         self.session_func = session_func
 
@@ -33,7 +34,7 @@ class Server:
         self.active = False
 
         self.accept_thread.join()
-        self.Clean(None)
+        self.Clean(len(self.conns), None)
 
         print(f"stopped")
 
@@ -42,7 +43,7 @@ class Server:
             try:
                 conn, addr = self.socket.accept()
             except socket.timeout:
-                self.Clean(10 / 1000) # try to join with 10ms timeout
+                self.Clean(20, 1 / 1000) # try to join with 10ms timeout
                 continue
 
             if not self.active:
@@ -58,18 +59,17 @@ class Server:
 
             self.conns.append((conn, addr, thread))
 
-    def Clean(self, timeout):
-        new_conns = list()
+    def Clean(self, max_query_num, timeout):
+        max_query_num = min(max_query_num, len(self.conns))
 
-        for p in self.conns:
-            conn, addr, thread = p
+        for _ in range(max_query_num):
+            conn, addr, thread = self.conns[-1]
 
             thread.join(timeout)
 
             if thread.is_alive():
-                new_conns.append(p)
+                self.conns.rotate()
             else:
                 print(f"close connection from {addr}")
                 conn.close()
-
-        self.conns = new_conns
+                self.conns.pop()
