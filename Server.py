@@ -1,6 +1,5 @@
 import socket
 import threading
-from collections import deque
 
 class Server:
     def __init__(self, addr, port, session_func):
@@ -8,10 +7,14 @@ class Server:
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((addr, port))
-        self.socket.settimeout(2)
+        self.socket.settimeout(20 / 1000)
         self.socket.listen(1024)
 
-        self.conns = deque()
+        self.serve_thread = threading.Thread(target=self.Serve)
+
+        self.conns = dict() # {conn_id: (conn, addr, thread), ...}
+
+        self.lock = threading.Lock()
 
         self.session_func = session_func
 
@@ -19,32 +22,37 @@ class Server:
         return self.active
 
     def Start(self):
+        if self.active:
+            return
+
         print(f"starting server")
 
         self.active = True
 
-        self.accept_thread = threading.Thread(target=self.Accept)
-        self.accept_thread.start()
+        self.serve_thread.start()
 
         print(f"started")
 
     def Stop(self):
+        if not self.active:
+            return
+
         print(f"stopping server")
 
         self.active = False
 
-        self.accept_thread.join()
-        self.Clean(len(self.conns), None)
+        self.serve_thread.join()
 
         print(f"stopped")
 
-    def Accept(self):
+    def Serve(self):
         while self.active:
             try:
                 conn, addr = self.socket.accept()
             except socket.timeout:
-                self.Clean(20, 1 / 1000) # try to join with 10ms timeout
-                continue
+                if self.active:
+                    continue
+                break
 
             if not self.active:
                 conn.close()
@@ -52,24 +60,28 @@ class Server:
 
             print(f"connection from {addr}")
 
-            thread = threading.Thread(target=self.session_func,
-                                      args=(self, conn, addr))
+            conn_id = id(conn)
+
+            thread = threading.Thread(
+                target=self.session_func,
+                args=(self, conn, addr,
+                      lambda : self.EndCallback(conn_id)))
+
+            self.lock.acquire()
+
+            self.conns[conn_id] = (conn, addr, thread)
+
+            self.lock.release()
 
             thread.start()
 
-            self.conns.append((conn, addr, thread))
+    def EndCallback(self, conn_id):
+        self.lock.acquire()
 
-    def Clean(self, max_query_num, timeout):
-        max_query_num = min(max_query_num, len(self.conns))
+        conn, addr, thread = self.conns[conn_id]
+        conn.close()
+        del self.conns[conn_id]
 
-        for _ in range(max_query_num):
-            conn, addr, thread = self.conns[-1]
+        self.lock.release()
 
-            thread.join(timeout)
-
-            if thread.is_alive():
-                self.conns.rotate()
-            else:
-                print(f"close connection from {addr}")
-                conn.close()
-                self.conns.pop()
+        print(f"diconnect from {addr}")

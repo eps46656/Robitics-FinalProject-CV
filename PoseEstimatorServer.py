@@ -14,9 +14,7 @@ class PoseEstimatorServer:
     def Stop(self):
         self.server.Stop()
 
-    def SessionFuncA(self, _, conn, addr):
-        print(f"start serving connection from {addr}")
-
+    def SessionFuncA(self, _, conn, addr, end_callback):
         conn.settimeout(2)
 
         while self.server.is_active():
@@ -32,7 +30,7 @@ class PoseEstimatorServer:
                 print(f"exception message: {e}")
                 break
 
-        print(f"stop serving connection from {addr}")
+        end_callback()
 
 def main():
     addr = socket.gethostname()
