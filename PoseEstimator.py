@@ -62,8 +62,6 @@ def parse_args():
         f"{config.LOGO_CAP_DIR}/weights/logocap/logocap-hrnet-w32-coco.pth.tar"
     ])
 
-    print(args)
-
     return args
 
 def Inference(outputs):

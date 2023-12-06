@@ -27,29 +27,33 @@ def main():
 
     cap = cv.VideoCapture(0)
 
-    while True:
-        ret, frame = cap.read()
+    try:
+        while True:
+            ret, frame = cap.read()
 
-        img = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+            img = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
 
-        if True:
-            sb_image.Send(img)
+            if True:
+                sb_image.Send(img)
 
-            poses = sb_arr.Recv(time.time() + 1000)
-            scores = sb_arr.Recv(time.time() + 1000)
+                poses = sb_arr.Recv(time.time() + 1000)
+                scores = sb_arr.Recv(time.time() + 1000)
 
-            anno_img = AnnoPoses(img, poses, scores)
-        else:
-            anno_img = img
+                anno_img = AnnoPoses(img, poses, scores)
+            else:
+                anno_img = img
 
-        anno_frame = cv.cvtColor(anno_img, cv.COLOR_RGB2BGR)
+            anno_frame = cv.cvtColor(anno_img, cv.COLOR_RGB2BGR)
 
-        cv.imshow("anno_frame", anno_frame)
+            cv.imshow("anno_frame", anno_frame)
 
-        if cv.waitKey(50) & 0xff == ord("q"):
-            break
+            if cv.waitKey(50) & 0xff == ord("q"):
+                break
+    except Exception as e:
+        print(f"e = {e}")
 
     s.close()
+    print(f"s.close()")
 
 if __name__ == "__main__":
     main()

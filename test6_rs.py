@@ -35,35 +35,39 @@ def main():
 
     rs_pipe.start(rs_cfg)
 
-    while True:
-        frame = rs_pipe.wait_for_frames()
+    try:
+        while True:
+            frame = rs_pipe.wait_for_frames()
 
-        color_frame = frame.get_color_frame()
-        depth_frame = frame.get_depth_frame()
+            color_frame = frame.get_color_frame()
+            depth_frame = frame.get_depth_frame()
 
-        color_img = np.asanyarray(color_frame.get_data())
-        depth_img = np.asanyarray(depth_frame.get_data())
+            color_img = np.asanyarray(color_frame.get_data())
+            depth_img = np.asanyarray(depth_frame.get_data())
 
-        img = cv.cvtColor(color_img, cv.COLOR_BGR2RGB)
+            img = cv.cvtColor(color_img, cv.COLOR_BGR2RGB)
 
-        if True:
-            sb_image.Send(img)
+            if True:
+                sb_image.Send(img)
 
-            poses = sb_arr.Recv(time.time() + 1000)
-            scores = sb_arr.Recv(time.time() + 1000)
+                poses = sb_arr.Recv(time.time() + 1000)
+                scores = sb_arr.Recv(time.time() + 1000)
 
-            anno_img = AnnoPoses(img, poses, scores)
-        else:
-            anno_img = img
+                anno_img = AnnoPoses(img, poses, scores)
+            else:
+                anno_img = img
 
-        anno_frame = cv.cvtColor(anno_img, cv.COLOR_RGB2BGR)
+            anno_frame = cv.cvtColor(anno_img, cv.COLOR_RGB2BGR)
 
-        cv.imshow("anno_frame", anno_frame)
+            cv.imshow("anno_frame", anno_frame)
 
-        if cv.waitKey(50) & 0xff == ord("q"):
-            break
+            if cv.waitKey(50) & 0xff == ord("q"):
+                break
+    except Exception as e:
+        print(f"e = {e}")
 
     s.close()
+    print(f"s.close()")
 
 if __name__ == "__main__":
     main()

@@ -4,9 +4,13 @@ import time
 from collections import deque
 import numpy as np
 
+class DisconnectionException(Exception):
+    def __init__(self):
+        super().__init__("DisconnectionException")
+
 class TimeoutException(Exception):
     def __init__(self):
-        super().__init__("")
+        super().__init__("TimeoutException")
 
 class SocketBufferByte:
     def __init__(self, s):
@@ -40,6 +44,9 @@ class SocketBufferByte:
                 b = self.s.recv(recv_size)
             except socket.timeout:
                 continue
+
+            if len(b) == 0:
+                raise DisconnectionException()
 
             self.buf.extend(b)
 
