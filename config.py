@@ -1,3 +1,3 @@
-LOGO_CAP_DIR = ""
+LOGO_CAP_DIR = "/media/yu46656/08570A0408570A04/research/LOGO-CAP/logocap"
 
 PORT = 8436

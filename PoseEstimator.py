@@ -15,8 +15,7 @@ import sys
 
 import config
 
-sys.path.append(os.path.join(os.path.dirname(__file__),
-                             config.LOGO_CAP_DIR))
+sys.path.append(os.path.join(config.LOGO_CAP_DIR))
 
 import logocap
 from logocap.config import cfg,update_config,check_config
@@ -63,6 +62,8 @@ def parse_args():
         f"{config.LOGO_CAP_DIR}/weights/logocap/logocap-hrnet-w32-coco.pth.tar"
     ])
 
+    print(args)
+
     return args
 
 def Inference(outputs):
@@ -70,8 +71,8 @@ def Inference(outputs):
     if poses is None:
         return None, None
 
-    poses = poses.cpu().numpy()
-    scores = outputs['scores'].cpu().numpy()
+    poses = poses.cpu().detach().numpy()
+    scores = outputs['scores'].cpu().detach().numpy()
 
     final_poses = poses
 
@@ -112,6 +113,33 @@ keypoint_idx_to_str = [
 
 keypoint_str_to_idx = {s:i for i, s in enumerate(keypoint_idx_to_str)}
 
+keypoint_links = [
+    ["l-shoulder", "r-shoulder"],
+    ["l-hip", "r-hip"],
+
+    ["l-shoulder", "l-hip"],
+    ["l-hip", "l-knee"],
+    ["l-knee", "l-ankle"],
+
+    ["l-shoulder", "l-elbow"],
+    ["l-elbow", "l-wrist"],
+
+    ["l-shoulder", "l-hip"],
+    ["l-hip", "l-knee"],
+    ["l-knee", "l-ankle"],
+
+    ["r-shoulder", "r-hip"],
+    ["r-hip", "r-knee"],
+    ["r-knee", "r-ankle"],
+
+    ["r-shoulder", "r-elbow"],
+    ["r-elbow", "r-wrist"],
+
+    ["r-shoulder", "r-hip"],
+    ["r-hip", "r-knee"],
+    ["r-knee", "r-ankle"],
+]
+
 def load_model(args):
     model, targets_encoder = logocap.models.build_model(cfg, is_train=False)
 
@@ -128,10 +156,6 @@ def load_model(args):
 
 class PoseEstimator:
     def __init__(self):
-        args = parse_args()
-        update_config(cfg, args)
-        check_config(cfg)
-
         self.model = load_model(args)
         self.model.eval()
         self.model = self.model.to('cuda')
@@ -143,8 +167,6 @@ class PoseEstimator:
 
         assert len(img.shape) == 3
         assert img.shape[2] == 3
-
-        img_h, img_w, _ = img.shape
 
         img = torch.tensor(img / 255, dtype=torch.float32).permute(2, 0, 1)
 
@@ -165,3 +187,40 @@ class PoseEstimator:
         poses[:, :, 1] /= self.rs_img_h
 
         return poses, scores
+
+def AnnoPoses(img, poses, scores):
+    img_h, img_w, _ = img.shape
+
+    img = img.copy()
+
+    for pose, score in zip(poses, scores):
+        if score < 0.02:
+            continue
+
+        keypoint = np.empty((17, 2), dtype=np.int32)
+        keypoint[:, 0] = np.round(pose[:, 0] * img_w).astype(np.int32)
+        keypoint[:, 1] = np.round(pose[:, 1] * img_h).astype(np.int32)
+
+        xmin = keypoint[:, 0].min().item()
+        ymin = keypoint[:, 1].min().item()
+        xmax = keypoint[:, 0].max().item()
+        ymax = keypoint[:, 1].max().item()
+
+        # cv.rectangle(out_img, (xmin, ymin), (xmax, ymax), (255, 255, 255), 2)
+
+        for keypoint_link in keypoint_links:
+            cv.line(img,
+                    keypoint[keypoint_str_to_idx[keypoint_link[0]], :],
+                    keypoint[keypoint_str_to_idx[keypoint_link[1]], :],
+                    (0, 255, 0), 2)
+
+        for keypoint in pose:
+            x = int(round(keypoint[0] * img_w))
+            y = int(round(keypoint[1] * img_h))
+            cv.circle(img, (x, y), 0, (255, 0, 0), 5)
+
+    return img
+
+args = parse_args()
+update_config(cfg, args)
+check_config(cfg)

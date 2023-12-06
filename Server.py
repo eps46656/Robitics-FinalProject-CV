@@ -2,11 +2,11 @@ import socket
 import threading
 
 class Server:
-    def __init__(self, addr, port, session_func):
+    def __init__(self, host, port, session_func):
         self.active = False
 
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind((addr, port))
+        self.socket.bind((host, port))
         self.socket.settimeout(20 / 1000)
         self.socket.listen(1024)
 
