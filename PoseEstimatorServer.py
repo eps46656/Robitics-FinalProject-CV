@@ -1,20 +1,15 @@
 import os
+import sys
 
 DIR = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 
-import sys
-
 import config
+import cv2 as cv
 import socket
 
 from Server import *
 from PoseEstimator import PoseEstimator
-
 from SocketBuffer import *
-
-import cv2 as cv
-
-rgb_frames_tmp = list()
 
 class PoseEstimatorServer:
     def __init__(self, host, port):
@@ -62,7 +57,7 @@ class PoseEstimatorServer:
 
             print(f"recved img")
 
-            rgb_frames_tmp.append(img)
+            # rgb_frames_tmp.append(img)
 
         end_callback()
 
@@ -130,7 +125,9 @@ class PoseEstimatorServer:
         end_callback()
 
 def main():
-    host = sys.argv[1]
+    print(sys.argv)
+
+    host = socket.gethostname()
     port = int(sys.argv[2])
 
     pose_es = PoseEstimatorServer(host, port)
@@ -138,7 +135,7 @@ def main():
     pose_es.Start()
 
     try:
-        input("")
+        input()
     except:
         pass
 

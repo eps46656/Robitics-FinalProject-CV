@@ -3,13 +3,14 @@ import os
 DIR = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 
 import config
-import socket
 import cv2 as cv
+import socket
+
 from SocketBuffer import *
 
 class PoseEstimatorClient:
     def __init__(self, addr, port):
-        self.s = socket.socket()
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((addr, port))
 
         self.sb_byte = SocketBufferByte(self.s)
@@ -19,8 +20,8 @@ class PoseEstimatorClient:
     def Estimate(self, img):
         self.sb_img.Send(img)
 
-        poses = self.sb_arr.Recv()
-        scores = self.sb_arr.Recv()
+        poses = self.sb_arr.Recv(None)
+        scores = self.sb_arr.Recv(None)
 
         return poses, scores
 
@@ -32,10 +33,6 @@ def main():
 
     sb_byte = SocketBufferByte(s)
     sb_img = SocketBufferImage(sb_byte)
-
-    print(__file__)
-    print(DIR)
-    print(f"{DIR}/anno_v.mp4")
 
     rgb_in = cv.VideoCapture(f"{DIR}/anno_v.mp4")
 

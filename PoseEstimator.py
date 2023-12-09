@@ -195,6 +195,10 @@ def AnnoPoses(img, poses, scores):
         if score < 0.02:
             continue
 
+        # pose[17, 3] ratio of image
+        # pose[k, 0] * img_w for w idx of keypoint k
+        # pose[k, 1] * img_h for h idx of keypoint k
+
         keypoint = np.empty((17, 2), dtype=np.int32)
         keypoint[:, 0] = np.round(pose[:, 0] * img_w).astype(np.int32)
         keypoint[:, 1] = np.round(pose[:, 1] * img_h).astype(np.int32)

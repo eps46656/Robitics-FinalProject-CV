@@ -1,31 +1,27 @@
 import os
+import sys
 
 DIR = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 
 import config
-import sys
 
 from queue import Queue
 from collections import deque
 import cv2 as cv
 import socket
+
 from Server import *
 from SocketBuffer import *
 from PoseEstimator import PoseEstimator, AnnoPoses
+from PoseEstimatorClient import PoseEstimatorClient
 
 import pyrealsense2 as rs
 
 def main():
-    print(f"{sys.argv}")
+    host = config.CSIE_SERVER_HOST
+    port = config.PORT
 
-    s = socket.socket()
-    host = sys.argv[1]
-    port = int(sys.argv[2])
-    s.connect((host, port))
-
-    sb_byte = SocketBufferByte(s)
-    sb_image = SocketBufferImage(sb_byte)
-    sb_arr = SocketBufferArr(sb_byte)
+    pec = PoseEstimatorClient(host, port)
 
     rs_pipe = rs.pipeline()
     rs_cfg  = rs.config()
@@ -42,20 +38,13 @@ def main():
             color_frame = frame.get_color_frame()
             depth_frame = frame.get_depth_frame()
 
-            color_img = np.asanyarray(color_frame.get_data())
-            depth_img = np.asanyarray(depth_frame.get_data())
+            color_frame = np.asanyarray(color_frame.get_data())
+            depth_frame = np.asanyarray(depth_frame.get_data())
 
-            img = cv.cvtColor(color_img, cv.COLOR_BGR2RGB)
+            img = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
 
-            if True:
-                sb_image.Send(img)
-
-                poses = sb_arr.Recv(time.time() + 1000)
-                scores = sb_arr.Recv(time.time() + 1000)
-
-                anno_img = AnnoPoses(img, poses, scores)
-            else:
-                anno_img = img
+            poses, scores = pec.Estimate(img)
+            anno_img = AnnoPoses(img, poses, scores)
 
             anno_frame = cv.cvtColor(anno_img, cv.COLOR_RGB2BGR)
 
@@ -64,10 +53,7 @@ def main():
             if cv.waitKey(50) & 0xff == ord("q"):
                 break
     except Exception as e:
-        print(f"e = {e}")
-
-    s.close()
-    print(f"s.close()")
+        print(f"exception message = {e}")
 
 if __name__ == "__main__":
     main()

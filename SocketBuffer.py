@@ -23,18 +23,21 @@ class SocketBufferByte:
         if size == 0:
             return bytearray(0)
 
-        if deadline <= time.time():
+        if deadline is not None and deadline <= time.time():
             raise TimeoutException()
 
         old_timeout = self.s.gettimeout()
 
         while len(self.buf) < size:
-            remaining_time = deadline - time.time()
+            remaining_time = None
 
-            if remaining_time <= 0:
-                break
+            if deadline is not None:
+                remaining_time = deadline - time.time()
 
-            remaining_time = max(remaining_time, 1 / 1000)
+                if remaining_time <= 0:
+                    break
+
+                remaining_time = max(remaining_time, 1 / 1000)
 
             self.s.settimeout(remaining_time)
 
