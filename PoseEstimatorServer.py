@@ -15,12 +15,18 @@ class PoseEstimatorServer:
     def __init__(self, host, port):
         self.server = Server(host, port, self.SessionFunc)
         self.pe = PoseEstimator()
+        self.poses = None
+        self.scores = None
 
     def Start(self):
         self.server.Start()
 
     def Stop(self):
         self.server.Stop()
+
+    def Estimate(self, img):
+        self.poses, self.scores = self.pe.Estimate(img)
+        print(f"PoseEstimatorServer: Estimate: {time.time()}")
 
     def SessionFuncD(self, _, conn, addr, end_callback):
         sb_byte = SocketBufferByte(conn)
@@ -64,22 +70,18 @@ class PoseEstimatorServer:
     def SessionFunc(self, _, conn, addr, end_callback):
         sb_byte = SocketBufferByte(conn)
         sb_arr = SocketBufferArr(sb_byte)
-        sb_img = SocketBufferImage(sb_byte)
 
         while self.server.is_active():
             try:
-                img = sb_img.Recv(time.time() + 20 / 1000)
-            except TimeoutException:
-                continue
+                sb_byte.Recv(1, None)
+                print(f"ajbkaodw")
             except Exception as e:
-                print(f"exception when receiving image: {e}")
+                print(f"exception when sending poses and scores: {e}")
                 break
 
-            poses, scores = self.pe.Estimate(img)
-
             try:
-                sb_arr.Send(poses)
-                sb_arr.Send(scores)
+                sb_arr.Send(self.poses)
+                sb_arr.Send(self.scores)
             except Exception as e:
                 print(f"exception when sending poses and scores: {e}")
                 break

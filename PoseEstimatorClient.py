@@ -17,8 +17,8 @@ class PoseEstimatorClient:
         self.sb_arr = SocketBufferArr(self.sb_byte)
         self.sb_img = SocketBufferImage(self.sb_byte)
 
-    def Estimate(self, img):
-        self.sb_img.Send(img)
+    def Estimate(self):
+        self.sb_byte.Send(int(0).to_bytes(1, "little"))
 
         poses = self.sb_arr.Recv(None)
         scores = self.sb_arr.Recv(None)
