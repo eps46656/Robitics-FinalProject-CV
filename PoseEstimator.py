@@ -32,7 +32,7 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 torch.set_grad_enabled(False)
-torch.multiprocessing.set_sharing_strategy('file_system')
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 import numpy as np
 import math
@@ -43,16 +43,16 @@ import torchvision
 import cv2 as cv
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Test keypoints network')
+    parser = argparse.ArgumentParser(description="Test keypoints network")
     # general
-    parser.add_argument('--cfg',
-                        help='experiment configure file name',
+    parser.add_argument("--cfg",
+                        help="experiment configure file name",
                         required=True,
                         type=str)
-    parser.add_argument('--ckpt',
+    parser.add_argument("--ckpt",
                         default = None,
                         type=str,
-                        help='checkpoint path for inference'
+                        help="checkpoint path for inference"
     )
 
     args = parser.parse_args([
@@ -65,12 +65,14 @@ def parse_args():
     return args
 
 def Inference(outputs):
-    poses = outputs['poses']
+    poses = outputs["poses"]
+    scores = outputs["scores"]
+
     if poses is None:
         return None, None
 
-    poses = poses.cpu().detach().numpy()
-    scores = outputs['scores'].cpu().detach().numpy()
+    poses = poses.cpu().numpy()
+    scores = scores.cpu().numpy()
 
     final_poses = poses
 
@@ -99,7 +101,7 @@ def load_model(args):
     else:
         raise RuntimeError()
 
-    model.load_state_dict(torch.load(model_state_file,map_location='cpu'))
+    model.load_state_dict(torch.load(model_state_file,map_location="cpu"))
 
     return model
 
@@ -107,9 +109,10 @@ class PoseEstimator:
     def __init__(self):
         self.model = load_model(args)
         self.model.eval()
-        self.model = self.model.to('cuda')
+        self.model = self.model.to("cuda")
 
-        self.rs_img_h, self.rs_img_w = 512, 512
+        self.rs_img_h = 384
+        self.rs_img_w = 384
 
     def Estimate(self, img):
         # img[h, w, 3] 0 ~ 255 rgb

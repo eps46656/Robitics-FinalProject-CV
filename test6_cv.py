@@ -10,16 +10,14 @@ from collections import deque
 import cv2 as cv
 import socket
 
+from utils import *
 from Server import *
 from SocketBuffer import *
-from PoseEstimator import PoseEstimator, AnnoPoses
+from PoseEstimator import PoseEstimator
 from PoseEstimatorClient import PoseEstimatorClient
 
 def main():
-    host = config.CSIE_SERVER_HOST
-    port = config.PORT
-
-    pec = PoseEstimatorClient(host, port)
+    pe = PoseEstimator()
 
     cap = cv.VideoCapture(0)
 
@@ -29,7 +27,7 @@ def main():
 
             img = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
 
-            poses, scores = pec.Estimate(img)
+            poses, scores = pe.Estimate(img)
             anno_img = AnnoPoses(img, poses, scores)
 
             anno_frame = cv.cvtColor(anno_img, cv.COLOR_RGB2BGR)

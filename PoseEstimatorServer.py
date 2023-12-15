@@ -74,7 +74,6 @@ class PoseEstimatorServer:
         while self.server.is_active():
             try:
                 sb_byte.Recv(1, None)
-                print(f"ajbkaodw")
             except Exception as e:
                 print(f"exception when sending poses and scores: {e}")
                 break

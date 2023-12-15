@@ -10,34 +10,28 @@ from collections import deque
 import cv2 as cv
 import socket
 
-from Server import *
+from utils import *
 from SocketBuffer import *
-from PoseEstimatorServer import PoseEstimatorServer
+from PoseEstimatorClientRS import PoseEstimatorClientRS
 
 def main():
-    # host = socket.gethostname()
+    img_h = 480
+    img_w = 640
+    fps = 30
+
     host = "10.42.0.1"
     port = config.PORT
 
-    pe_server = PoseEstimatorServer(host, port)
-
-    cap = cv.VideoCapture(0)
-
-    pe_server.Start()
+    pec = PoseEstimatorClientRS(host, port)
 
     try:
         while True:
-            ret, frame = cap.read()
+            pose = pec.Recv()
 
-            img = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-
-            pe_server.Estimate(img)
-
-            time.sleep(1/ 20)
+            if cv.waitKey(50) & 0xff == ord("q"):
+                break
     except Exception as e:
         print(f"exception message = {e}")
-
-    pe_server.Stop()
 
 if __name__ == "__main__":
     main()

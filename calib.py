@@ -14,7 +14,6 @@ from scipy.spatial.transform import Rotation as scipy_Rotation
 
 from utils import *
 
-
 GLOBAL = EMPTY_CLASS()
 
 GLOBAL.chessboard = EMPTY_CLASS()
@@ -56,8 +55,8 @@ def FindCornerPoints(imgs):
     for img in imgs:
         img = img.copy()
 
-        cv.imshow("img", img)
-        cv.waitKey(0)
+        # cv.imshow("img", img)
+        # cv.waitKey(0)
 
         gray = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
 
@@ -83,8 +82,8 @@ def FindCornerPoints(imgs):
 
         img_points.append(corners)
 
-    obj_points = np.stack(obj_points, axis=0, dtype=np.float32)
-    img_points = np.stack(img_points, axis=0, dtype=np.float32)
+    obj_points = np.stack(obj_points, axis=0).astype(np.float64)
+    img_points = np.stack(img_points, axis=0).astype(np.float64)
 
     return obj_points, img_points
 
@@ -105,9 +104,14 @@ def HandEyeCalib(camera_mat, camera_distort, Ts_base_to_gripper, imgs):
 
     for T_base_to_gripper, img, cur_obj_points, cur_img_points \
     in zip(Ts_base_to_gripper, imgs, obj_points, img_points):
+        print(f"img.shape = {img.shape}")
+        print(f"cur_obj_points.shape = {cur_obj_points.shape}")
+        print(f"cur_img_points.shape = {cur_img_points.shape}")
+        print(f"camera_mat = {camera_mat}")
+        print(f"camera_distort = {camera_distort}")
         success, rvec, tvec = cv.solvePnP(
             objectPoints=cur_obj_points,
-            imagePoints=cur_img_points,
+            imagePoints=cur_img_points[:, None, :],
             cameraMatrix=camera_mat,
             distCoeffs=camera_distort,
             flags=cv.SOLVEPNP_EPNP)
@@ -125,8 +129,11 @@ def HandEyeCalib(camera_mat, camera_distort, Ts_base_to_gripper, imgs):
         t_gripper2base=Ts_base_to_gripper[:, :3, 3],
         R_target2cam=Ts_obj_to_camera[:, :3, :3],
         t_target2cam=Ts_obj_to_camera[:, :3, 3],
+        # method=cv.CALIB_HAND_EYE_TSAI
+        # method=cv.CALIB_HAND_EYE_PARK
+        method=cv.CALIB_HAND_EYE_HORAUD
+        # method=cv.CALIB_HAND_EYE_ANDREFF
         # method=cv.CALIB_HAND_EYE_DANIILIDIS
-        method=cv.CALIB_HAND_EYE_TSAI
     )
 
     T = np.identity(4)
@@ -159,20 +166,40 @@ def main():
     NPSave(f"{DIR}/camera_params", {"camera_mat": camera_mat,
                                     "camera_distort": camera_distort,})
 
-    rot = np.array([90, 0, -60])
-    base_loc_beg = np.array([227, -412, 177])
-    base_loc_end = np.array([160, -381, 551.8])
+    target_Cpose = [[227, -412, 177, 90, 0, -60],
+                    [284, -449, 273, 84, 10, -60],
+                    [249.45, -398.59, 265.26, 89.45, -1.52, -79.46],
+                    [265, -451, 422, 90, -4, -34],
+                    [201, -437, 443, 92, -7, -54],
+                    [122, -450, 508, 90, -15, -45],
+                    [174.59, -502.0, 486.36, 89.41, 25.81, -45.86],
+                    [146.82, -434.45, 502.51, 76.4, 17.13, -88.37],]
+
+    img_num = len(target_Cpose)
 
     Ts_base_to_gripper = list()
 
-    for t in np.linspace(0, 1, 9):
-        loc = base_loc_beg * (1 - t) + base_loc_end * t
+    imgs = list()
+
+    for i in range(img_num):
+        if i == 3:
+            continue
+
+        if i == 5:
+            continue
+
+        if i == 6:
+            continue
+
+        imgs.append(ReadImage(f"{DIR}/img_{i}.png"))
+
+        pose = target_Cpose[i]
 
         T = np.identity(4)
-        T = GetHomoRotMat([1, 0, 0], rot[0] * GLOBAL.DEG_TO_RAD) @ T
-        T = GetHomoRotMat([0, 1, 0], rot[1] * GLOBAL.DEG_TO_RAD) @ T
-        T = GetHomoRotMat([0, 0, 1], rot[2] * GLOBAL.DEG_TO_RAD) @ T
-        T = GetHomoTransMat(loc) @ T
+        T = GetHomoRotMat([1, 0, 0], pose[3] * GLOBAL.DEG_TO_RAD) @ T
+        T = GetHomoRotMat([0, 1, 0], pose[4] * GLOBAL.DEG_TO_RAD) @ T
+        T = GetHomoRotMat([0, 0, 1], pose[5] * GLOBAL.DEG_TO_RAD) @ T
+        T = GetHomoTransMat(pose[0:3]) @ T
 
         T = np.linalg.inv(T)
 
@@ -183,11 +210,12 @@ def main():
     T_camera_to_base = HandEyeCalib(
         camera_mat, camera_distort,
         Ts_base_to_gripper,
-        [ReadImg(f"{DIR}/hand_eye_calib_images/img_{i}.png")
-         for i in range(9)])
+        imgs)
 
     print("T_camera_to_base")
     print(T_camera_to_base)
+
+    NPSave(f"{DIR}/T_camera_to_base.npy", T_camera_to_base)
 
 if __name__ == "__main__":
     main()

@@ -18,7 +18,9 @@ from AnnoPoses import AnnoPoses
 from PoseEstimatorClient import PoseEstimatorClient
 
 def main():
-    host = socket.gethostname()
+    # host = socket.gethostname()
+    # host = "127.0.0.1"
+    host = "10.42.0.1"
     port = config.PORT
 
     pec = PoseEstimatorClient(host, port)
