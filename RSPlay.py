@@ -18,9 +18,9 @@ def main():
     color_frames = NPLoad(color_filename)
     depth_frames = NPLoad(depth_filename)
 
-    H = 480
-    W = 640
-    FPS = 30
+    img_h = 480
+    img_w = 640
+    fps = 30
 
     load_saved_poses = True
 
@@ -55,7 +55,7 @@ def main():
         poses.append(cur_poses.copy())
         scores.append(cur_scores.copy())
 
-        delay = max(1, int((1 / FPS - time.time() + prev_frame_time) * 1000))
+        delay = max(1, int((1 / fps - time.time() + prev_frame_time) * 1000))
 
         if cv.waitKey(delay) & 0xff == ord("q"):
             break

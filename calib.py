@@ -1,4 +1,3 @@
-#!/home/whcheng/.pyenv/shims/python
 import os
 import sys
 
@@ -7,10 +6,6 @@ DIR = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 import numpy as np
 import cv2 as cv
 import math
-
-import glob
-
-from scipy.spatial.transform import Rotation as scipy_Rotation
 
 from utils import *
 
@@ -26,8 +21,6 @@ GLOBAL.chessboard.grid_len = 25
 
 GLOBAL.RAD_TO_DEG = 180 / math.pi
 GLOBAL.DEG_TO_RAD = math.pi / 180
-
-
 
 def PointsToHomoPoints(points):
     # points[P, N]
@@ -82,8 +75,8 @@ def FindCornerPoints(imgs):
 
         img_points.append(corners)
 
-    obj_points = np.stack(obj_points, axis=0).astype(np.float64)
-    img_points = np.stack(img_points, axis=0).astype(np.float64)
+    obj_points = np.stack(obj_points, axis=0).astype(np.float32)
+    img_points = np.stack(img_points, axis=0).astype(np.float32)
 
     return obj_points, img_points
 
@@ -104,11 +97,6 @@ def HandEyeCalib(camera_mat, camera_distort, Ts_base_to_gripper, imgs):
 
     for T_base_to_gripper, img, cur_obj_points, cur_img_points \
     in zip(Ts_base_to_gripper, imgs, obj_points, img_points):
-        print(f"img.shape = {img.shape}")
-        print(f"cur_obj_points.shape = {cur_obj_points.shape}")
-        print(f"cur_img_points.shape = {cur_img_points.shape}")
-        print(f"camera_mat = {camera_mat}")
-        print(f"camera_distort = {camera_distort}")
         success, rvec, tvec = cv.solvePnP(
             objectPoints=cur_obj_points,
             imagePoints=cur_img_points[:, None, :],
@@ -145,35 +133,18 @@ def HandEyeCalib(camera_mat, camera_distort, Ts_base_to_gripper, imgs):
     return T_camera_to_base
 
 def main():
-    camera_mat, camera_distort = None, None
-
-    if False:
-        camera_mat, camera_distort = CameraCalib(
-            [ReadImg(filename)
-            for filename in \
-                glob.glob(f"{DIR}/camera_calib_images/frame-*_Color.png")])
-    else:
-        camera_params = NPLoad(f"{DIR}/camera_params.npy").item()
-        camera_mat = camera_params["camera_mat"]
-        camera_distort = camera_params["camera_distort"]
-
-    print("camera_mat")
-    print(camera_mat)
-
-    print("camera_distort")
-    print(camera_distort)
-
-    NPSave(f"{DIR}/camera_params", {"camera_mat": camera_mat,
-                                    "camera_distort": camera_distort,})
-
-    target_Cpose = [[227, -412, 177, 90, 0, -60],
-                    [284, -449, 273, 84, 10, -60],
-                    [249.45, -398.59, 265.26, 89.45, -1.52, -79.46],
-                    [265, -451, 422, 90, -4, -34],
-                    [201, -437, 443, 92, -7, -54],
-                    [122, -450, 508, 90, -15, -45],
-                    [174.59, -502.0, 486.36, 89.41, 25.81, -45.86],
-                    [146.82, -434.45, 502.51, 76.4, 17.13, -88.37],]
+    target_Cpose = [
+        (227.0, -412.0, 177.0, 90.0, 0.0, -60.0),
+        (181.47, -594.01, 224.79, 89.11, -8.35, -34.42),
+        (186.79, -422.13, 203.07, 100.85, -0.1, -80.82),
+        (330.47, -314.68, 252.24, 104.03, -3.55, -56.43),
+        (278.93, -454.98, 315.46, 89.62, 15.66, -29.09),
+        (219.3, -389.65, 190.19, 94.28, -25.89, -80.85),
+        (318.99, -509.51, 68.04, 94.08, -12.93, -48.74),
+        (282.31, -387.05, 91.58, 105.81, -10.51, -93.1),
+        (285.95, -500.72, 204.98, 87.42, 11.14, -39.65),
+        (256.91, -506.04, 174.18, 107.86, -25.41, -73.66),
+    ]
 
     img_num = len(target_Cpose)
 
@@ -182,16 +153,10 @@ def main():
     imgs = list()
 
     for i in range(img_num):
-        if i == 3:
+        if i in [5, 9]:
             continue
 
-        if i == 5:
-            continue
-
-        if i == 6:
-            continue
-
-        imgs.append(ReadImage(f"{DIR}/img_{i}.png"))
+        imgs.append(ReadImage(f"{DIR}/hand_eye_calib_images/img_{i}.png"))
 
         pose = target_Cpose[i]
 
@@ -207,13 +172,27 @@ def main():
 
     Ts_base_to_gripper = np.stack(Ts_base_to_gripper, axis=0)
 
+    camera_mat, camera_distort = None, None
+
+    if False:
+        camera_mat, camera_distort = CameraCalib(imgs)
+
+        NPSave(f"{DIR}/camera_params", {"camera_mat": camera_mat,
+                                    "camera_distort": camera_distort,})
+    else:
+        camera_params = NPLoad(f"{DIR}/camera_params.npy").item()
+        camera_mat = camera_params["camera_mat"]
+        camera_distort = camera_params["camera_distort"]
+
+    print("camera_mat =\n{camera_mat}")
+    print("camera_distort =\n{camera_distort}")
+
     T_camera_to_base = HandEyeCalib(
         camera_mat, camera_distort,
         Ts_base_to_gripper,
         imgs)
 
-    print("T_camera_to_base")
-    print(T_camera_to_base)
+    print("T_camera_to_base =\n{T_camera_to_base}")
 
     NPSave(f"{DIR}/T_camera_to_base.npy", T_camera_to_base)
 

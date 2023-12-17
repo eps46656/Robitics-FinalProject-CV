@@ -111,8 +111,8 @@ class PoseEstimator:
         self.model.eval()
         self.model = self.model.to("cuda")
 
-        self.rs_img_h = 384
-        self.rs_img_w = 384
+        self.rs_img_h = 512
+        self.rs_img_w = 512
 
     def Estimate(self, img):
         # img[h, w, 3] 0 ~ 255 rgb

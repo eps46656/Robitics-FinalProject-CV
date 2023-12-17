@@ -110,14 +110,13 @@ keypoint_links = [
     ["r-knee", "r-ankle"],
 ]
 
-
 def AnnoPoses(img, poses, scores):
     img_h, img_w, _ = img.shape
 
     img = img.copy()
 
     for pose, score in zip(poses, scores):
-        if score < 0.02:
+        if score < 0.01:
             continue
 
         # pose[17, 3] ratio of image

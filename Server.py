@@ -18,6 +18,9 @@ class Server:
 
         self.session_func = session_func
 
+    def __del__(self):
+        self.Stop()
+
     def is_active(self):
         return self.active
 
@@ -60,14 +63,14 @@ class Server:
 
             print(f"connection from {addr}")
 
-            conn_id = id(conn)
+            conn_id = addr
+
+            self.lock.acquire()
 
             thread = threading.Thread(
                 target=self.session_func,
                 args=(self, conn, addr,
                       lambda : self.EndCallback(conn_id)))
-
-            self.lock.acquire()
 
             self.conns[conn_id] = (conn, addr, thread)
 

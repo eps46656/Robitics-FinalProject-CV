@@ -16,6 +16,9 @@ class PoseEstimatorServerRS:
     def __init__(self, host, port):
         self.server = Server(host, port, self.SessionFunc)
         self.pe = PoseEstimator()
+
+        self.prev_updated_time = None
+        self.score = None
         self.pose = None
 
         self.lock = threading.Lock()
@@ -26,10 +29,50 @@ class PoseEstimatorServerRS:
     def Stop(self):
         self.server.Stop()
 
-    def UpdatePose(self, pose):
+    def UpdatePose(self, score, pose):
         self.lock.acquire()
 
-        self.pose = pose.copy()
+        score = np.array([score], np.float32)
+        pose = np.array(pose, np.float32)
+
+        try:
+            if self.prev_updated_time is None:
+                self.prev_updated_time = time.time()
+                self.score = score
+                self.pose = pose
+                self.lock.release()
+                return
+        except Exception as e:
+            print(f"exception when self.pose = pose.copy(): {e}")
+
+        try:
+            cur_time = time.time()
+            delta_time = cur_time - self.prev_updated_time
+
+            self.prev_updated_time = cur_time
+            self.score = score
+
+            lam = config.EXP_LP_RATIO ** delta_time
+            max_kp_diff_norm = config.MAX_KEYPOINT_VELOCITY * delta_time
+
+            for k in range(17):
+                cur_kp = self.pose[k].copy()
+                nxt_kp = pose[k]
+
+                # velocity = np.linalg.norm(cur_pose - nxt_pose) / delta_time
+
+                # lam = config.EXP_LP_RATIO ** velocity
+                # self.pose[k] = (cur_pose * lam + nxt_pose * (1 - lam)) - cur_pose
+
+                kp_diff = (cur_kp * lam + nxt_kp * (1 - lam)) - cur_kp
+                kp_diff_norm = np.linalg.norm(kp_diff)
+                kp_diff *= (
+                    max_kp_diff_norm * np.tanh(kp_diff_norm / max_kp_diff_norm)
+                    / kp_diff_norm)
+
+                self.pose[k] = self.pose[k] + kp_diff
+        except Exception as e:
+            print(f"exception when self.score = np.array([score], np.float32): {e}")
 
         self.lock.release()
 
@@ -41,35 +84,18 @@ class PoseEstimatorServerRS:
             try:
                 sb_byte.Recv(1, None)
             except Exception as e:
-                print(f"exception when sending poses and scores: {e}")
+                print(f"exception when sb_byte.Recv(1, None): {e}")
                 break
 
             try:
                 self.lock.acquire()
-                sb_arr.Send(self.pose.copy())
+
+                sb_arr.Send(self.score)
+                sb_arr.Send(self.pose)
+
                 self.lock.release()
             except Exception as e:
-                print(f"exception when sending poses and scores: {e}")
+                print(f"exception when sb_arr.Send(self.pose.copy()): {e}")
                 break
 
         end_callback()
-
-def main():
-    print(sys.argv)
-
-    host = socket.gethostname()
-    port = int(sys.argv[2])
-
-    pose_es = PoseEstimatorServer(host, port)
-
-    pose_es.Start()
-
-    try:
-        input()
-    except:
-        pass
-
-    pose_es.Stop()
-
-if __name__ == "__main__":
-    main()
