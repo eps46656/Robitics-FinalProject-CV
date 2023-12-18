@@ -6,6 +6,8 @@ DIR = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 import numpy as np
 import cv2 as cv
 import math
+import itertools
+import random
 
 from utils import *
 
@@ -21,6 +23,16 @@ GLOBAL.chessboard.grid_len = 25
 
 GLOBAL.RAD_TO_DEG = 180 / math.pi
 GLOBAL.DEG_TO_RAD = math.pi / 180
+
+def MakeTFromRt(R, t):
+    assert R.shape == (3, 3)
+    assert t.shape == (3, 1)
+
+    T = np.identity(4, dtype=R.dtype)
+    T[:3, :3] = R
+    T[:3, 3] = t[:, 0]
+
+    return T
 
 def PointsToHomoPoints(points):
     # points[P, N]
@@ -70,8 +82,8 @@ def FindCornerPoints(imgs):
             img, (GLOBAL.chessboard.pattern_h, GLOBAL.chessboard.pattern_w),
             corners, ret)
 
-        cv.imshow("checkerboard img", img)
-        cv.waitKey(0)
+        # cv.imshow("checkerboard img", img)
+        # cv.waitKey(0)
 
         img_points.append(corners)
 
@@ -89,6 +101,145 @@ def CameraCalib(imgs):
         None, None)
 
     return camera_mat, camera_distort
+
+def GetMKOfAXXB(AR, At, BR, Bt):
+    # AR[3, 3]
+    # At[3, 1]
+    # BR[3, 3]
+    # Bt[3, 1]
+
+    assert AR.shape == (3, 3)
+    assert At.shape == (3, 1)
+    assert BR.shape == (3, 3)
+    assert Bt.shape == (3, 1)
+
+    MA = np.zeros((12, 12), dtype=AR.dtype)
+
+    for i, j in itertools.product(range(3), range(4)):
+        MA[4*i+j, 0+j] = AR[i, 0]
+        MA[4*i+j, 4+j] = AR[i, 1]
+        MA[4*i+j, 8+j] = AR[i, 2]
+
+    KA = np.zeros((12, 1), dtype=At.dtype)
+
+    for i in range(3):
+        KA[4*i+3] = At[i, 0]
+
+    BT = MakeTFromRt(BR, Bt)
+
+    MB = np.zeros((12, 12), dtype=BR.dtype)
+
+    for i in range(3):
+        MB[4*i:4*i+4, 4*i:4*i+4] = BT.transpose()
+
+    '''
+
+    [ AR At ][ XR Xt ] = [ XR Xt ][ BR Bt ]
+    [  0  1 ][  0  1 ] = [  0  1 ][  0  1 ]
+
+    MA * X + KA = MB * X
+
+    (MA - MB) * X = -KA
+
+    '''
+
+    return MA - MB, -KA
+
+def RefineToRot(M):
+    assert M.shape == (3, 3)
+    U, _, Vh = np.linalg.svd(M)
+    return U @ Vh
+
+def MyCalicaretHandEye(R_gripper2base, t_gripper2base,
+                       R_target2cam, t_target2cam):
+    N = R_gripper2base.shape[0]
+    dtype = R_gripper2base.dtype
+
+    assert R_gripper2base.shape == (N, 3, 3)
+    assert t_gripper2base.shape == (N, 3, 1)
+    assert R_target2cam.shape == (N, 3, 3)
+    assert t_target2cam.shape == (N, 3, 1)
+
+    T_gripper2base = np.empty((N, 4, 4), dtype=dtype)
+    T_target2cam = np.empty((N, 4, 4), dtype=dtype)
+
+    for i in range(N):
+        T_gripper2base[i] = MakeTFromRt(R_gripper2base[i], t_gripper2base[i])
+        T_target2cam[i] = MakeTFromRt(R_target2cam[i], t_target2cam[i])
+
+    pairs = list(itertools.combinations(range(N), 2))
+    clusters = list(itertools.combinations(pairs, len(pairs)))
+
+    As = np.empty((N, N, 4, 4), dtype=dtype)
+    Bs = np.empty((N, N, 4, 4), dtype=dtype)
+
+    for a, b in pairs:
+        As[a, b] = np.linalg.inv(T_gripper2base[b]) @ T_gripper2base[a]
+        Bs[a, b] = T_target2cam[b] @ np.linalg.inv(T_target2cam[a])
+
+    best_num_of_inliers = 0
+    best_X = None
+
+    test_num = len(clusters)
+
+    # for test_i in range(test_num):
+        # p1, p2 = random.choice(pair_pairs)
+
+    def Solve(ps):
+        cur_As = list(As[p[0], p[1]] for p in ps)
+        cur_Bs = list(Bs[p[0], p[1]] for p in ps)
+
+        Ms = list()
+        Ks = list()
+
+        for A, B in zip(cur_As, cur_Bs):
+            M, K = GetMKOfAXXB(A[:3, :3], A[:3, 3:], B[:3, :3], B[:3, 3:])
+
+            Ms.append(M)
+            Ks.append(K)
+
+        M = np.stack(Ms).reshape((-1, 12))
+        K = np.stack(Ks).reshape((-1, 1))
+
+        X = np.concatenate([
+            np.linalg.lstsq(M, K, rcond=None)[0].reshape((3, 4)),
+            np.array([[0, 0, 0, 1]])], axis=0)
+
+        X[:3, :3] = RefineToRot(X[:3, :3])
+
+        return X
+
+    def IsInlier(err):
+        return err < 50
+
+    for ps in clusters:
+        X = Solve(ps)
+
+        num_of_inliers = 0
+
+        for a, b in pairs:
+            err = ((As[a, b] @ X - X @ Bs[a, b])**2)[:3, :].mean()**0.5
+
+            if IsInlier(err):
+                num_of_inliers += 1
+
+        if best_num_of_inliers < num_of_inliers:
+            best_num_of_inliers = num_of_inliers
+            best_X = X
+
+    print(f"best_X = {best_X}")
+
+    inliers = list()
+
+    for a, b in pairs:
+        err = ((As[a, b] @ X - X @ Bs[a, b])**2)[:3, :].mean()**0.5
+
+        if IsInlier(err):
+            inliers.append((a, b))
+
+    best_X = Solve(inliers)
+
+    return best_X[:3, :3], best_X[:3, 3:]
 
 def HandEyeCalib(camera_mat, camera_distort, Ts_base_to_gripper, imgs):
     obj_points, img_points = FindCornerPoints(imgs)
@@ -112,17 +263,25 @@ def HandEyeCalib(camera_mat, camera_distort, Ts_base_to_gripper, imgs):
 
     Ts_obj_to_camera = np.stack(Ts_obj_to_camera, axis=0)
 
-    R, t = cv.calibrateHandEye(
-        R_gripper2base=Ts_base_to_gripper[:, :3, :3],
-        t_gripper2base=Ts_base_to_gripper[:, :3, 3],
-        R_target2cam=Ts_obj_to_camera[:, :3, :3],
-        t_target2cam=Ts_obj_to_camera[:, :3, 3],
-        # method=cv.CALIB_HAND_EYE_TSAI
-        # method=cv.CALIB_HAND_EYE_PARK
-        method=cv.CALIB_HAND_EYE_HORAUD
-        # method=cv.CALIB_HAND_EYE_ANDREFF
-        # method=cv.CALIB_HAND_EYE_DANIILIDIS
-    )
+    if True:
+        R, t = cv.calibrateHandEye(
+            R_gripper2base=Ts_base_to_gripper[:, :3, :3],
+            t_gripper2base=Ts_base_to_gripper[:, :3, 3:],
+            R_target2cam=Ts_obj_to_camera[:, :3, :3],
+            t_target2cam=Ts_obj_to_camera[:, :3, 3:],
+            # method=cv.CALIB_HAND_EYE_TSAI
+            # method=cv.CALIB_HAND_EYE_PARK
+            method=cv.CALIB_HAND_EYE_HORAUD
+            # method=cv.CALIB_HAND_EYE_ANDREFF
+            # method=cv.CALIB_HAND_EYE_DANIILIDIS
+        )
+    else:
+        R, t = MyCalicaretHandEye(
+            R_gripper2base=Ts_base_to_gripper[:, :3, :3],
+            t_gripper2base=Ts_base_to_gripper[:, :3, 3:],
+            R_target2cam=Ts_obj_to_camera[:, :3, :3],
+            t_target2cam=Ts_obj_to_camera[:, :3, 3:],
+        )
 
     T = np.identity(4)
     T[:3, :3] = R
@@ -184,17 +343,61 @@ def main():
         camera_mat = camera_params["camera_mat"]
         camera_distort = camera_params["camera_distort"]
 
-    print("camera_mat =\n{camera_mat}")
-    print("camera_distort =\n{camera_distort}")
+    print(f"camera_mat =\n{camera_mat}")
+    print(f"camera_distort =\n{camera_distort}")
 
     T_camera_to_base = HandEyeCalib(
         camera_mat, camera_distort,
         Ts_base_to_gripper,
         imgs)
 
-    print("T_camera_to_base =\n{T_camera_to_base}")
+    print(f"T_camera_to_base =\n{T_camera_to_base}")
 
     NPSave(f"{DIR}/T_camera_to_base.npy", T_camera_to_base)
+
+def main2():
+    XR = np.random.rand(3, 3)
+    Xt = np.random.rand(3, 1)
+    X = MakeTFromRt(XR, Xt)
+
+    N = 3
+
+    ARs = [np.random.rand(3, 3) for _ in range(N)]
+    Ats = [np.random.rand(3, 1) for _ in range(N)]
+    As = [MakeTFromRt(AR, At) for AR, At in zip(ARs, Ats)]
+
+    # A X = X B
+    Bs = [np.linalg.inv(X) @ A @ X for A in As]
+    BRs = [B[:3, :3] for B in Bs]
+    Bts = [B[:3, 3:] for B in Bs]
+
+    Ms = list()
+    Ks = list()
+
+    for AR, At, BR, Bt in zip(ARs, Ats, BRs, Bts):
+        M, K = GetMKOfAXXB(AR, At, BR, Bt)
+        # M[12, 12]
+        # K[12, 1]
+
+        Ms.append(M)
+        Ks.append(K)
+
+    stack_M = np.stack(Ms).reshape((-1, 12))
+    stack_K = np.stack(Ks).reshape((-1, 1))
+
+    re_X = np.linalg.lstsq(stack_M, stack_K, rcond=None)[0].reshape((3, 4))
+
+    re_X = MakeTFromRt(re_X[:, :3], re_X[:, 3:])
+
+    print(f"X=\n{X}")
+    print(f"re_X=\n{re_X}")
+
+def main3():
+    N = 5
+
+    pairs = itertools.combinations(range(N), 2)
+
+    print(list(pairs))
 
 if __name__ == "__main__":
     main()

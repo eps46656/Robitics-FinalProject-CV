@@ -53,24 +53,27 @@ class PoseEstimatorServerRS:
             self.score = score
 
             lam = config.EXP_LP_RATIO ** delta_time
-            max_kp_diff_norm = config.MAX_KEYPOINT_VELOCITY * delta_time
+            max_kp_delta_norm = config.MAX_KEYPOINT_VELOCITY * delta_time
 
             for k in range(17):
                 cur_kp = self.pose[k].copy()
                 nxt_kp = pose[k]
 
-                # velocity = np.linalg.norm(cur_pose - nxt_pose) / delta_time
+                '''
+                velocity = np.linalg.norm(cur_kp - nxt_kp) / delta_time
 
-                # lam = config.EXP_LP_RATIO ** velocity
-                # self.pose[k] = (cur_pose * lam + nxt_pose * (1 - lam)) - cur_pose
+                lam = config.EXP_LP_RATIO ** velocity
+                self.pose[k] = cur_kp * lam + nxt_kp * (1 - lam)
+                '''
 
-                kp_diff = (cur_kp * lam + nxt_kp * (1 - lam)) - cur_kp
-                kp_diff_norm = np.linalg.norm(kp_diff)
-                kp_diff *= (
-                    max_kp_diff_norm * np.tanh(kp_diff_norm / max_kp_diff_norm)
-                    / kp_diff_norm)
 
-                self.pose[k] = self.pose[k] + kp_diff
+                kp_delta = (cur_kp * lam + nxt_kp * (1 - lam)) - cur_kp
+                kp_delta_norm = float(np.linalg.norm(kp_delta))
+                kp_delta *= (
+                    max_kp_delta_norm * np.tanh(kp_delta_norm / max_kp_delta_norm) / kp_delta_norm)
+
+                self.pose[k] = self.pose[k] + kp_delta
+
         except Exception as e:
             print(f"exception when self.score = np.array([score], np.float32): {e}")
 

@@ -71,7 +71,7 @@ def main():
     T_camera_to_base = NPLoad(f"{DIR}/T_camera_to_base.npy")
 
     host = config.HOST
-    port = 8336
+    port = 8340
 
     pes = PoseEstimatorServerRS(host, port)
 
